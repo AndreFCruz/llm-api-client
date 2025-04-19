@@ -1,0 +1,5 @@
+litellm
+openai
+numpy
+tqdm
+pyrate-limiter>=3.0

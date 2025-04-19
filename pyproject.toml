@@ -1,0 +1,138 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-api-client"
+description = "A client for interacting with LLM APIs."
+license = {file = "LICENSE"}
+authors = [
+    { name = "Andre F. Cruz" },
+]
+
+# Keywords to be used by PyPI search
+keywords = ["llm", "api", "client"]
+
+# PyPI classifiers, see https://pypi.org/classifiers/
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+version = "0.0.1"
+requires-python = ">=3.11"   # NOTE: Must use Python 3.11 or higher
+
+# These are defined below dynamically:
+dynamic = [
+    "readme",
+    "dependencies",
+    "optional-dependencies",
+]
+
+[tool.setuptools.packages.find]
+include = ["llm_api_client*"]
+exclude = ["tests*"]
+
+[tool.setuptools.dynamic]
+readme = { file = "README.md", content-type="text/markdown" }
+
+# Main package dependencies
+dependencies = {file = "requirements/main.txt"}
+
+# Optional dependencies
+optional-dependencies.tests = {file = "requirements/tests.txt"}
+
+[project.urls]
+homepage = "https://github.com/AndreFCruz/llm-api-client"
+
+# flake8
+[tool.flake8]
+max-complexity = 10
+max-line-length = 120
+
+per-file-ignores = """
+# imported but unused
+**/__init__.py: F401
+"""
+
+exclude = [
+    "docs/",
+    ".tox/",
+    "build/",
+    "dist/",
+]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = [
+    "tests",
+]
+
+# isort
+[tool.isort]
+profile = "hug"
+force_single_line = false
+src_paths = ["llm_api_client", "tests"]
+
+# Coverage
+[tool.coverage.run]
+branch = true
+source = ["llm_api_client"]
+omit = ["llm_api_client/_version.py", "tests"]
+
+[tool.coverage.report]
+show_missing = true
+
+# MyPy
+[tool.mypy]
+ignore_missing_imports = true
+no_implicit_optional = false
+strict_optional = false
+exclude = [
+    "build",
+    "doc",
+    "tests",
+    "notebooks",
+]
+python_version = "3.11"
+
+# Tox
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+env_list =
+    py311
+    py312
+    py313
+    lint
+    type
+
+[testenv]
+description = run unit tests
+deps =
+    pytest>=8
+commands = python -m pytest {posargs:tests}
+
+[testenv:type]
+description = run type checks
+basepython = python3.11
+deps =
+    mypy>=1.0
+commands = mypy {posargs:llm_api_client}
+
+[testenv:lint]
+description = run linters
+skip_install = true
+deps =
+    flake8>=7.0
+    flake8-pyproject
+commands = flake8 {posargs:llm_api_client tests}
+"""
