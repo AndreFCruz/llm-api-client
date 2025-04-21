@@ -27,7 +27,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 
-version = "0.0.1"
+version = "0.1.0"
 requires-python = ">=3.11"   # NOTE: Must use Python 3.11 or higher
 
 # These are defined below dynamically:
