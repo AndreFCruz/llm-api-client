@@ -9,6 +9,12 @@ on:
     branches:
       - main
 
+# Add permissions for deploying to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   build-docs:
     runs-on: ubuntu-latest
@@ -33,3 +39,23 @@ jobs:
         sphinx-build -b html docs docs/_build/html -W --keep-going
         # -W turns warnings into errors
         # --keep-going ensures all errors are reported
+
+    - name: Upload Pages artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        # Upload entire directory
+        path: './docs/_build/html'
+
+  # Separate job for deployment
+  deploy-docs:
+    needs: build-docs
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    # Only deploy on pushes to the main branch
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
