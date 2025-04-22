@@ -31,15 +31,16 @@ class APIClient:
     file is specified. An APIUsageTracker instance is automatically instantiated to track
     the cost and usage of API calls.
 
-    Example usage:
+    Examples
+    --------
     >>> completion_api_client = APIClient(max_requests_per_minute=5)
     >>> requests = [
     >>>     dict(
     >>>         model="gpt-3.5-turbo",
     >>>         messages=[{"role": "user", "content": prompt}],
-    >>>     ) for prompt in user_prompts]
+    >>>     ) for prompt in user_prompts
+    >>> ]
     >>> results = completion_api_client.make_requests(requests)
-    >>> print(results)
     """
 
     def __init__(

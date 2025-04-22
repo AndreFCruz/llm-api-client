@@ -92,10 +92,11 @@ class APIUsageTracker:
         """Function to track cost of API calls.
 
         This function should be added as a callback to the litellm package, eg:
-        ```py
-        import litellm
-        litellm.success_callback = [self.track_cost_callback]
-        ```
+
+        .. code-block:: python
+
+            import litellm
+            litellm.success_callback = [self.track_cost_callback]
         """
         try:
             # Get response cost in USD
