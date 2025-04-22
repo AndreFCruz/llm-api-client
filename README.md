@@ -1,6 +1,8 @@
 # `llm-api-client` :robot::zap:
 
-![Build & Tests status](https://github.com/AndreFCruz/llm-api-client/actions/workflows/python-tests.yml/badge.svg)
+![Tests status](https://github.com/AndreFCruz/llm-api-client/actions/workflows/tests.yml/badge.svg)
+![Docs status](https://github.com/AndreFCruz/llm-api-client/actions/workflows/pypi-publish.yml/badge.svg)
+![PyPI status](https://github.com/AndreFCruz/llm-api-client/actions/workflows/pypi-publish.yml/badge.svg)
 ![PyPI version](https://badgen.net/pypi/v/llm-api-client)
 ![PyPI - License](https://img.shields.io/pypi/l/llm-api-client)
 ![Python compatibility](https://badgen.net/pypi/python/llm-api-client)
