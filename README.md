@@ -1,21 +1,23 @@
 # `llm-api-client` :robot::zap:
 
+[![Docs status](https://github.com/AndreFCruz/llm-api-client/actions/workflows/docs.yml/badge.svg)](https://andrefcruz.github.io/llm-api-client/)
 ![Tests status](https://github.com/AndreFCruz/llm-api-client/actions/workflows/tests.yml/badge.svg)
-![Docs status](https://github.com/AndreFCruz/llm-api-client/actions/workflows/pypi-publish.yml/badge.svg)
 ![PyPI status](https://github.com/AndreFCruz/llm-api-client/actions/workflows/pypi-publish.yml/badge.svg)
 ![PyPI version](https://badgen.net/pypi/v/llm-api-client)
 ![PyPI - License](https://img.shields.io/pypi/l/llm-api-client)
 ![Python compatibility](https://badgen.net/pypi/python/llm-api-client)
 
-A Python helper library for efficiently managing concurrent, rate-limited API requests, especially for Large Language Models (LLMs) via [LiteLLM](https://github.com/BerriAI/litellm).
+A Python helper library for efficiently managing concurrent, rate-limited API requests to LLM providers via [LiteLLM](https://github.com/BerriAI/litellm).
 
 It provides an `APIClient` that handles:
 *   **Concurrency:** Making multiple API calls simultaneously using threads.
 *   **Rate Limiting:** Respecting API limits for requests per minute (RPM) and tokens per minute (TPM).
 *   **Retries:** Automatically retrying failed requests.
 *   **Request Sanitization:** Cleaning up request parameters to ensure compatibility with different models/providers.
-*   **Context Management:** Truncating message history to fit within model context windows.
+*   **LLM Context Management:** Truncating message history to fit within model context windows.
 *   **Usage Tracking:** Monitoring API costs, token counts, and response times via an integrated `APIUsageTracker`.
+
+Code documentation available at [https://andrefcruz.github.io/llm-api-client/](https://andrefcruz.github.io/llm-api-client/)
 
 ## Installation
 
