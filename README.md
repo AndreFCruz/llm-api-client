@@ -29,6 +29,8 @@ pip install llm-api-client
 
 ## Usage
 
+The primary way to interact with the `APIClient` is through its `make_requests` and `make_requests_with_retries` methods, which handle concurrent execution, rate limiting, and retrying failed requests.
+
 Here's a basic example of using `APIClient` to make multiple completion requests concurrently:
 
 ```python
@@ -96,5 +98,17 @@ print(f"Mean response time: {client.tracker.mean_response_time:.2f}s")
 # print("\n--- History ---")
 # for entry in client.history:
 #     print(entry)
-
 ```
+
+### Method Parameters
+
+Both `make_requests` and `make_requests_with_retries` accept the following core parameters:
+
+*   `requests` (list[dict]): A list where each dictionary represents the parameters for a single API call (e.g., `model`, `messages`, `temperature`, etc.) -- follows the openai API standard via [`litellm`](https://github.com/BerriAI/litellm).
+*   `max_workers` (int, optional): The maximum number of concurrent threads to use for making API calls. Defaults to `min(CPU count * 20, max_rpm)`.
+*   `sanitize` (bool, optional): If `True` (default), the client will attempt to remove parameters that are incompatible with the specified model and provider before making the request. It also truncates message history to fit the model's context window.
+*   `timeout` (float, optional): The maximum number of seconds to wait for all requests to complete. If `None` (default), it waits indefinitely.
+
+The `make_requests_with_retries` method includes one additional parameter:
+
+*   `max_retries` (int, optional): The maximum number of times to retry a failed request. Defaults to 2.
