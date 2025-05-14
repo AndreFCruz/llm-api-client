@@ -592,11 +592,16 @@ class APIClient:
             """Convert a Unix timestamp to a formatted datetime string."""
             return datetime.fromtimestamp(response["created"]).strftime('%Y-%m-%d %H:%M:%S')
 
+        def get_response_content(response):
+            if response.choices and len(response.choices) > 0:
+                return response.choices[0].message.content
+            return None
+
         self._history.extend([
             {
                 "request": request,
                 "response": get_response_dict(response) if response else None,
-                "content": response.choices[0].message.content if response else None,
+                "content": get_response_content(response) if response else None,
                 "created_at": get_response_datetime(response) if response else None,
             }
             for request, response in zip(requests, responses)
