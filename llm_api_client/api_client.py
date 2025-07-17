@@ -19,7 +19,15 @@ OPENAI_API_REQUESTS_PER_MINUTE = 10_000
 # OPENAI_API_TOKENS_PER_MINUTE = 10_000_000
 OPENAI_API_TOKENS_PER_MINUTE = 2_000_000
 
-DEFAULT_MAX_CONTEXT_TOKENS = 20_000  # 20K tokens context window (default)
+# Default max context window tokens
+DEFAULT_MAX_CONTEXT_TOKENS_ENV_VAR = "DEFAULT_MAX_CONTEXT_TOKENS"
+try:
+    DEFAULT_MAX_CONTEXT_TOKENS = int(os.getenv(DEFAULT_MAX_CONTEXT_TOKENS_ENV_VAR, "20000"))
+except ValueError:
+    logging.getLogger(__name__).warning(
+        f"Environment variable {DEFAULT_MAX_CONTEXT_TOKENS_ENV_VAR} must be an integer. "
+        "Falling back to 20,000 tokens.")
+    DEFAULT_MAX_CONTEXT_TOKENS = 20_000  # 20K tokens context window (default)
 
 
 class APIClient:
@@ -430,11 +438,14 @@ class APIClient:
         """Get the maximum context tokens for a model."""
         try:
             model_info = litellm.get_model_info(model)
-            return model_info.get("max_input_tokens", DEFAULT_MAX_CONTEXT_TOKENS)
+            max_tokens = model_info.get("max_input_tokens")
+            if max_tokens is None:
+                raise ValueError("max_input_tokens not provided by litellm")
+            return max_tokens
         except Exception as e:
             self._logger.warning(
-                f"Could not get model info from litellm: {e}. "
-                f"Using a conservative default of {DEFAULT_MAX_CONTEXT_TOKENS} tokens.")
+                f"Could not get max context tokens from litellm: {e}. "
+                f"Using fallback default of {DEFAULT_MAX_CONTEXT_TOKENS} tokens.")
             return DEFAULT_MAX_CONTEXT_TOKENS
 
     def count_messages_tokens(
