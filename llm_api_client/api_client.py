@@ -13,6 +13,7 @@ import litellm
 from pyrate_limiter import Limiter, Rate, Duration
 
 from .api_tracker import APIUsageTracker  # Integrated API usage tracker
+from ._params import ALL_COMPLETION_PARAMS
 
 # OpenAI API Tier 4 has a rate limit of 10K RPM and 2M-10M TPM
 OPENAI_API_REQUESTS_PER_MINUTE = 10_000
@@ -359,15 +360,28 @@ class APIClient:
         # Construct dict of supported kwargs
         supported_kwargs = {k: v for k, v in request.items() if k in supported_params}
 
+        # Check provider-specific params (any non-openai and non-litellm params)
+        provider_specific_kwargs = {k: v for k, v in request.items() if k not in ALL_COMPLETION_PARAMS}
+
+        # Log provider-specific kwargs as info
+        if provider_specific_kwargs:
+            msg = f"Provider-specific parameters for model='{model}' in API request: {provider_specific_kwargs}."
+            if msg not in self._logged_msgs:
+                self._logger.info(msg)
+                self._logged_msgs.add(msg)
+
         # Log unsupported kwargs
-        unsupported_kwargs = {k: v for k, v in request.items() if k not in supported_params}
+        unsupported_kwargs = {
+            k: v for k, v in request.items()
+            if (k not in supported_params and k not in provider_specific_kwargs)
+        }
         if unsupported_kwargs:
             msg = f"Unsupported parameters for model='{model}' in API request: {unsupported_kwargs}."
             if msg not in self._logged_msgs:
                 self._logger.error(msg)
                 self._logged_msgs.add(msg)
 
-        return {"model": model, "messages": messages, **supported_kwargs}
+        return {"model": model, "messages": messages, **supported_kwargs, **provider_specific_kwargs}
 
     def truncate_to_max_context_tokens(
         self,
