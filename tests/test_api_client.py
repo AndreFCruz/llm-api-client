@@ -99,20 +99,22 @@ class TestAPIClient:
 
         # Request with both supported and unsupported parameters
         request = {
-            "model": "gpt-3.5-turbo",
+            "model": "openai/o3-mini",
             "messages": [{"role": "user", "content": "Hello"}],
-            "temperature": 0.7,
             "max_tokens": 100,
-            "unsupported_param": "value"  # This should be removed
+            "provider_specific_param": "value",  # This should be preserved as provider-specific
+            "temperature": 0.7,                  # This should be removed as it's not supported by o3-mini
         }
 
         # Make request with sanitization
         _ = client.make_requests([request])
 
-        # Check that unsupported_param was removed when making the request
+        # Check that:
+        # - unsupported `temperature` param was removed when making the request
+        # - provider-specific `provider_specific_param` was preserved
         sanitized_request = mock_completion.call_args[1]
-        assert "unsupported_param" not in sanitized_request
-        assert "temperature" in sanitized_request
+        assert "temperature" not in sanitized_request           # Not compatible with o3-mini
+        assert "provider_specific_param" in sanitized_request   # Unexpected kwargs are preserved as provider-specific
         assert "max_tokens" in sanitized_request
         assert "messages" in sanitized_request
 
