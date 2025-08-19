@@ -23,12 +23,12 @@ OPENAI_API_TOKENS_PER_MINUTE = 2_000_000
 # Default max context window tokens
 DEFAULT_MAX_CONTEXT_TOKENS_ENV_VAR = "DEFAULT_MAX_CONTEXT_TOKENS"
 try:
-    DEFAULT_MAX_CONTEXT_TOKENS = int(os.getenv(DEFAULT_MAX_CONTEXT_TOKENS_ENV_VAR, "20000"))
+    DEFAULT_MAX_CONTEXT_TOKENS = int(os.getenv(DEFAULT_MAX_CONTEXT_TOKENS_ENV_VAR, "100000"))
 except ValueError:
     logging.getLogger(__name__).warning(
         f"Environment variable {DEFAULT_MAX_CONTEXT_TOKENS_ENV_VAR} must be an integer. "
-        "Falling back to 20,000 tokens.")
-    DEFAULT_MAX_CONTEXT_TOKENS = 20_000
+        "Falling back to 100,000 tokens.")
+    DEFAULT_MAX_CONTEXT_TOKENS = 100_000
 
 
 class APIClient:

@@ -1,6 +1,4 @@
 """Module to expose version information.
-
-Resilient to running from source without an installed distribution.
 """
 from importlib import metadata
 
