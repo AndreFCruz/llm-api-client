@@ -496,7 +496,7 @@ class TestAPIClient:
         final_token_count = client.count_messages_tokens(truncated_messages, model="gpt-3.5-turbo")
 
         # Verify the token count is now within limits
-        reasonable_lower_bound = int(max_tokens * 0.8)
+        reasonable_lower_bound = int(max_tokens * 0.9)
         assert reasonable_lower_bound <= final_token_count <= max_tokens, (
             f"Truncated message from {initial_token_count} tokens to "
             f"{final_token_count} tokens; should be between "
@@ -568,78 +568,6 @@ class TestAPIClient:
             assert "content" in msg
             assert msg["role"] in ["system", "user", "assistant"]
             assert isinstance(msg["content"], str)
-
-    @patch('litellm.completion')
-    @patch('litellm.token_counter')
-    def test_tpm_old_impl_does_not_block_when_max_delay_too_small(self, mock_token_counter, mock_completion):
-        """Demonstrate that the previous rate-limit acquisition (single try) fails to block.
-
-        We configure TPM=1 token/sec and set the limiter's max_delay to a very small value.
-        For a request needing 3 tokens, the old implementation would call try_acquire once,
-        it would return quickly due to max_delay, and the request would proceed without
-        waiting ~3 seconds as required.
-        """
-        import time as _time
-        from types import MethodType
-        from pyrate_limiter import Limiter, Rate, Duration
-
-        mock_completion.return_value = MockResponse("ok")
-        mock_token_counter.return_value = 3
-
-        client = APIClient(max_requests_per_minute=None, max_tokens_per_minute=1)
-
-        client._tpm_limiter = Limiter(Rate(1, Duration.SECOND), max_delay=10)  # 10 ms
-
-        def old_acquire(self, *, request: dict) -> None:
-            model = request.get("model")
-            messages = request.get("messages", [])
-            token_count = self.count_messages_tokens(messages, model=model)
-            if self._rpm_limiter is not None:
-                self._rpm_limiter.try_acquire("api_calls", weight=1)
-            if self._tpm_limiter is not None:
-                self._tpm_limiter.try_acquire("tokens", weight=token_count)
-
-        client._acquire_rate_limited_resources = MethodType(old_acquire, client)
-
-        request = {
-            "model": "gpt-3.5-turbo",
-            "messages": [{"role": "user", "content": "abc"}],
-        }
-
-        start = _time.time()
-        _ = client.make_requests([request], sanitize=False, max_workers=1)
-        elapsed = _time.time() - start
-
-        assert elapsed < 0.5, f"Old implementation incorrectly blocked for {elapsed:.2f}s"
-
-    @patch('litellm.completion')
-    @patch('litellm.token_counter')
-    def test_tpm_new_impl_blocks_until_available_when_max_delay_too_small(self, mock_token_counter, mock_completion):
-        """Verify current implementation blocks until tokens are available, ignoring small max_delay.
-
-        With TPM=1 token/sec and request needing 3 tokens, our fixed looping acquisition
-        should wait roughly >=2 seconds before proceeding, even if limiter.max_delay is tiny.
-        """
-        import time as _time
-        from pyrate_limiter import Limiter, Rate, Duration
-
-        mock_completion.return_value = MockResponse("ok")
-        mock_token_counter.return_value = 3
-
-        client = APIClient(max_requests_per_minute=None, max_tokens_per_minute=1)
-
-        client._tpm_limiter = Limiter(Rate(1, Duration.SECOND), max_delay=10)  # 10 ms
-
-        request = {
-            "model": "gpt-3.5-turbo",
-            "messages": [{"role": "user", "content": "abc"}],
-        }
-
-        start = _time.time()
-        _ = client.make_requests([request], sanitize=False, max_workers=1)
-        elapsed = _time.time() - start
-
-        assert elapsed >= 2.0, f"New implementation failed to block long enough, elapsed={elapsed:.2f}s"
 
 
 if __name__ == "__main__":

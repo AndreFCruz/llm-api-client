@@ -43,6 +43,7 @@ class APIClient:
         max_requests_per_minute: int = OPENAI_API_REQUESTS_PER_MINUTE,
         max_tokens_per_minute: int = OPENAI_API_TOKENS_PER_MINUTE,
         max_workers: int = None,
+        max_delay_seconds: int = 5 * 60,
     ):
         """Initialize the API client.
 
@@ -68,7 +69,7 @@ class APIClient:
 
         # Set up rate limiter using pyrate-limiter
         limiter_config = {
-            "max_delay": 120_000,  # 2 minutes
+            "max_delay": max_delay_seconds * 1000,  # milliseconds
         }
 
         # RPM limiter
@@ -406,27 +407,24 @@ class APIClient:
             return
 
         # Acquire RPM first (single unit)
+        rpm_lock_acquired = True
         if self._rpm_limiter is not None:
-            while True:
-                try:
-                    if self._rpm_limiter.try_acquire("api_calls", 1):
-                        break
-                except Exception:
-                    pass
-                time.sleep(1)
+            rpm_lock_acquired = False
+            rpm_lock_acquired = self._rpm_limiter.try_acquire("api_calls", 1)
 
         # Acquire TPM tokens in one request; rely on pyrate-limiter to handle weights
-        if self._tpm_limiter is not None and token_count > 0:
-            while True:
-                try:
-                    if self._tpm_limiter.try_acquire("tokens", weight=token_count):
-                        break
-                except Exception:
-                    pass
-                time.sleep(1)
+        tpm_lock_acquired = True
+        if rpm_lock_acquired and self._tpm_limiter is not None and token_count > 0:
+            tpm_lock_acquired = False
+            tpm_lock_acquired = self._tpm_limiter.try_acquire("tokens", weight=token_count)
 
-        self._logger.debug(
-            f"Thread {thread_id} acquired rate limit resources: request={1}, tokens={token_count}")
+        if rpm_lock_acquired and tpm_lock_acquired:
+            self._logger.debug(
+                f"Thread {thread_id} acquired rate limit resources: request={1}, tokens={token_count}")
+        else:
+            self._logger.error(
+                f"Thread {thread_id} FAILED to acquire rate limit resources: request={1}, tokens={token_count}; "
+                f"rpm_lock_acquired={rpm_lock_acquired}, tpm_lock_acquired={tpm_lock_acquired}")
 
     def __save_history(self, *, requests: list[dict], responses: list[object]) -> None:
         """Save API requests and responses to the client's history."""

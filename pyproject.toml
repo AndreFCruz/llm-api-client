@@ -75,6 +75,7 @@ minversion = "8.0"
 testpaths = [
     "tests",
 ]
+addopts = "-n auto"
 
 # isort
 [tool.isort]
