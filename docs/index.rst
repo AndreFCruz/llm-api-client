@@ -7,6 +7,9 @@ Welcome to llm-api-client's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   getting_started
+   usage
+   configuration
    api
 
 

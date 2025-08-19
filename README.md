@@ -17,7 +17,7 @@ It provides an `APIClient` that handles:
 *   **LLM Context Management:** Truncating message history to fit within model context windows.
 *   **Usage Tracking:** Monitoring API costs, token counts, and response times via an integrated `APIUsageTracker`.
 
-Code documentation available at [https://andrefcruz.github.io/llm-api-client/](https://andrefcruz.github.io/llm-api-client/)
+Full documentation: [https://andrefcruz.github.io/llm-api-client/](https://andrefcruz.github.io/llm-api-client/)
 
 ## Installation
 
