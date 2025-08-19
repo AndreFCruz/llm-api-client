@@ -254,8 +254,14 @@ class TestAPIClient:
         elapsed = time.time() - start_time
 
         # The second request should NOT block for ~60s; it should return quickly
+        # and should NOT invoke the completion due to max_delay being exceeded.
         assert len(results) == 2
-        assert mock_completion.call_count == 2
+        # First request succeeds, second is None due to rate-limit acquisition failure
+        assert results[0] is not None
+        assert results[1] is None
+        # Only one API call should have been made
+        assert mock_completion.call_count == 1
+        # Ensure we didn't wait a full minute
         assert elapsed <= 3, f"Expected requests to complete quickly due to max_delay_seconds; took {elapsed:.2f}s"
 
     @patch('litellm.completion')
@@ -587,7 +593,7 @@ class TestAPIClient:
         final_token_count = client.count_messages_tokens(truncated_messages, model="gpt-3.5-turbo")
 
         # Verify the token count is now within limits
-        reasonable_lower_bound = int(max_tokens * 0.8)
+        reasonable_lower_bound = int(max_tokens * 0.9)
         assert reasonable_lower_bound <= final_token_count <= max_tokens, (
             f"Truncated message from {initial_token_count} tokens to "
             f"{final_token_count} tokens; should be between "

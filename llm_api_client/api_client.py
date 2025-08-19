@@ -421,9 +421,13 @@ class APIClient:
             self._logger.debug(
                 f"Thread {thread_id} acquired rate limit resources: request={1}, tokens={token_count}")
         else:
-            self._logger.error(
+            # Do not proceed with the API call if we could not acquire within max_delay
+            message = (
                 f"Thread {thread_id} FAILED to acquire rate limit resources: request={1}, tokens={token_count}; "
-                f"rpm_lock_acquired={rpm_lock_acquired}, tpm_lock_acquired={tpm_lock_acquired}")
+                f"rpm_lock_acquired={rpm_lock_acquired}, tpm_lock_acquired={tpm_lock_acquired}"
+            )
+            self._logger.error(message)
+            raise RuntimeError("Rate limit acquisition failed due to max_delay constraint")
 
     def __save_history(self, *, requests: list[dict], responses: list[object]) -> None:
         """Save API requests and responses to the client's history."""
