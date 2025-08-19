@@ -132,6 +132,25 @@ for i, response in enumerate(responses):
         print(f"Response {i+1}: Request failed.")
 ```
 
+### Usage statistics and tracking
+
+`APIClient` integrates an `APIUsageTracker` that accumulates cost, token usage, and response time stats across all calls.
+
+Quick peek:
+
+```python
+print(client.tracker)  # human-readable summary
+print(client.tracker.details)  # machine-friendly dict
+
+print(f"Total cost: ${client.tracker.total_cost:.4f}")
+print(f"Total prompt tokens: {client.tracker.total_prompt_tokens}")
+print(f"Total completion tokens: {client.tracker.total_completion_tokens}")
+print(f"Number of API calls: {client.tracker.num_api_calls}")
+print(f"Mean response time: {client.tracker.mean_response_time:.2f}s")
+```
+
+See tracker API: https://andrefcruz.github.io/llm-api-client/api.html#module-llm_api_client.api_tracker
+
 ### Client Parameters
 
 The `APIClient` constructor accepts:
