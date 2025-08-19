@@ -222,6 +222,43 @@ class TestAPIClient:
         assert mock_completion.call_count == n_requests
 
     @patch('litellm.completion')
+    @patch('litellm.token_counter')
+    def test_max_delay_seconds_stops_blocking_early(self, mock_token_counter, mock_completion):
+        """Test that max_delay_seconds bounds how long rate limiting blocks.
+
+        With RPM=1 and two concurrent requests, the second request would normally
+        need to wait ~60s for the next slot. By setting max_delay_seconds=1, the
+        limiter should stop blocking early and allow the call to proceed without
+        waiting the full minute.
+        """
+        # Setup mocks
+        mock_token_counter.return_value = 1
+        mock_completion.return_value = MockResponse()
+
+        # Initialize client with strong RPM limit and very small max_delay
+        client = APIClient(
+            max_requests_per_minute=1,
+            max_tokens_per_minute=None,
+            max_workers=2,
+            max_delay_seconds=1,
+        )
+
+        # Prepare 2 requests that will be executed concurrently
+        requests = [
+            {"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": f"Test {i}"}]}
+            for i in range(2)
+        ]
+
+        start_time = time.time()
+        results = client.make_requests(requests, max_workers=2, sanitize=False)
+        elapsed = time.time() - start_time
+
+        # The second request should NOT block for ~60s; it should return quickly
+        assert len(results) == 2
+        assert mock_completion.call_count == 2
+        assert elapsed <= 3, f"Expected requests to complete quickly due to max_delay_seconds; took {elapsed:.2f}s"
+
+    @patch('litellm.completion')
     def test_request_failure_handling(self, mock_completion):
         """Test handling of failed requests."""
         # Make the second request fail
