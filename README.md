@@ -19,6 +19,12 @@ It provides an `APIClient` that handles:
 
 Full documentation: [https://andrefcruz.github.io/llm-api-client/](https://andrefcruz.github.io/llm-api-client/)
 
+For API reference and more examples, see:
+- Getting Started: [https://andrefcruz.github.io/llm-api-client/getting_started.html](https://andrefcruz.github.io/llm-api-client/getting_started.html)
+- Usage Guide: [https://andrefcruz.github.io/llm-api-client/usage.html](https://andrefcruz.github.io/llm-api-client/usage.html)
+- Configuration: [https://andrefcruz.github.io/llm-api-client/configuration.html](https://andrefcruz.github.io/llm-api-client/configuration.html)
+- API Reference: [https://andrefcruz.github.io/llm-api-client/api.html](https://andrefcruz.github.io/llm-api-client/api.html)
+
 ## Installation
 
 Install the package directly from PyPI:
@@ -26,6 +32,48 @@ Install the package directly from PyPI:
 ```bash
 pip install llm-api-client
 ```
+
+## Quick start
+
+### Single request
+
+```python
+from llm_api_client import APIClient
+
+client = APIClient()  # Defaults approximate OpenAI Tier 4 limits
+
+responses = client.make_requests([
+    {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": "Say hello in one sentence."}],
+    }
+])
+
+print(responses[0].choices[0].message.content)
+```
+
+### With retries
+
+```python
+responses = client.make_requests_with_retries([
+    {"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "Hi!"}]}
+], max_retries=2)
+```
+
+### Disable request sanitization (advanced)
+
+```python
+responses = client.make_requests([
+    {"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "Hi!"}]}
+], sanitize=False)
+```
+
+### Control concurrency and rate limits
+
+```python
+client = APIClient(max_requests_per_minute=600, max_tokens_per_minute=100_000, max_workers=50)
+```
+
 
 ## Usage
 
@@ -56,7 +104,7 @@ prompts = [
 
 requests_data = [
     {
-        "model": "gpt-3.5-turbo",
+        "model": "gpt-4o-mini",
         "messages": [{"role": "user", "content": prompt}],
         # Add other parameters like temperature, max_tokens etc. if needed
         # "temperature": 0.7,
@@ -82,30 +130,22 @@ for i, response in enumerate(responses):
             print(f"Raw response: {response}")
     else:
         print(f"Response {i+1}: Request failed.")
-
-# Access usage statistics
-print("\n--- Usage Statistics ---")
-print(client.tracker) # Prints detailed stats
-
-# Or access specific stats
-print(f"Total cost: ${client.tracker.total_cost:.4f}")
-print(f"Total prompt tokens: {client.tracker.total_prompt_tokens}")
-print(f"Total completion tokens: {client.tracker.total_completion_tokens}")
-print(f"Number of successful API calls: {client.tracker.num_api_calls}")
-print(f"Mean response time: {client.tracker.mean_response_time:.2f}s")
-
-# View request/response history
-# print("\n--- History ---")
-# for entry in client.history:
-#     print(entry)
 ```
+
+### Client Parameters
+
+The `APIClient` constructor accepts:
+
+- `max_requests_per_minute` (int, default `10000`): Maximum API requests per minute (RPM).
+- `max_tokens_per_minute` (int, default `2000000`): Maximum tokens per minute (TPM).
+- `max_workers` (int, optional): Maximum worker threads. If not set, defaults to `max_requests_per_minute` when provided, otherwise to `CPU count * 20`.
 
 ### Method Parameters
 
 Both `make_requests` and `make_requests_with_retries` accept the following core parameters:
 
 *   `requests` (list[dict]): A list where each dictionary represents the parameters for a single API call (e.g., `model`, `messages`, `temperature`, etc.) -- follows the openai API standard via [`litellm`](https://github.com/BerriAI/litellm).
-*   `max_workers` (int, optional): The maximum number of concurrent threads to use for making API calls. Defaults to `min(CPU count * 20, max_rpm)`.
+*   `max_workers` (int, optional): Maximum concurrent threads. Defaults to the client's configured worker count (set via the constructor).
 *   `sanitize` (bool, optional): If `True` (default), the client will attempt to remove parameters that are incompatible with the specified model and provider before making the request. It also truncates message history to fit the model's context window.
 *   `timeout` (float, optional): The maximum number of seconds to wait for all requests to complete. If `None` (default), it waits indefinitely.
 
