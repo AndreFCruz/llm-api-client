@@ -4,7 +4,6 @@ Additional tests for APIUsageTracker.
 These tests exercise cost tracking, response time statistics, and integration
 points with LiteLLM callbacks.
 """
-import time
 from datetime import datetime, timedelta
 
 import pytest
@@ -103,4 +102,3 @@ def test_set_up_litellm_cost_tracking_sets_callback(monkeypatch):
 
     assert isinstance(litellm.success_callback, list)
     assert tracker.track_cost_callback in litellm.success_callback
-

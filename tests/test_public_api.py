@@ -1,7 +1,4 @@
 """Smoke tests for public package exports and version module behavior."""
-import types
-
-import pytest
 
 import llm_api_client as pkg
 
@@ -19,4 +16,3 @@ def test_version_metadata_available():
     # __version_info__ should be a tuple of components
     assert isinstance(pkg.__version_info__, tuple)
     assert len(pkg.__version_info__) >= 2
-

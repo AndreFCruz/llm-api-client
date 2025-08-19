@@ -31,4 +31,3 @@ def test_all_params_contains_both_sets_without_missing_items():
 
     assert openai_set.issubset(all_set)
     assert litellm_set.issubset(all_set)
-

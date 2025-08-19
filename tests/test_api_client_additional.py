@@ -3,8 +3,6 @@ Additional edge-case tests for APIClient not covered in the main test file.
 """
 from unittest.mock import patch
 
-import pytest
-
 from llm_api_client import APIClient
 
 
@@ -86,4 +84,3 @@ def test_remove_unsupported_params_filters_o_series_temperature(mock_get_params)
     cleaned = client.remove_unsupported_params(req)
     assert "temperature" not in cleaned
     assert "max_tokens" in cleaned
-
