@@ -90,7 +90,10 @@ class APIUsageTracker:
     @property
     def mean_response_time(self) -> float | None:
         """Mean response time of API calls in seconds."""
-        return float(np.mean([float(r.get('elapsed_time', 0) or 0) for r in self._responses])) if self._responses else None
+        return (
+            float(np.mean([float(r.get('elapsed_time', 0) or 0) for r in self._responses]))
+            if self._responses else None
+        )
 
     def response_time_at_percentile(self, percentile: float) -> float | None:
         """Response time at a given percentile in seconds."""

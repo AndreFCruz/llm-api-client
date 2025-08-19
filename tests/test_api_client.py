@@ -618,7 +618,7 @@ class TestAPIClient:
         """Verify current implementation blocks until tokens are available, ignoring small max_delay.
 
         With TPM=1 token/sec and request needing 3 tokens, our fixed looping acquisition
-        should wait roughly >=3 seconds before proceeding, even if limiter.max_delay is tiny.
+        should wait roughly >=2 seconds before proceeding, even if limiter.max_delay is tiny.
         """
         import time as _time
         from pyrate_limiter import Limiter, Rate, Duration
@@ -639,9 +639,8 @@ class TestAPIClient:
         _ = client.make_requests([request], sanitize=False, max_workers=1)
         elapsed = _time.time() - start
 
-        assert elapsed >= 2.5, f"New implementation failed to block long enough, elapsed={elapsed:.2f}s"
+        assert elapsed >= 2.0, f"New implementation failed to block long enough, elapsed={elapsed:.2f}s"
 
 
 if __name__ == "__main__":
     pytest.main([__file__])
-

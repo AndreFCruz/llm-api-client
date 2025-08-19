@@ -2,6 +2,7 @@
 
 import os
 import copy
+import time
 import threading
 from typing import Any
 from datetime import datetime
@@ -194,7 +195,8 @@ class APIClient:
         for idx, response in enumerate(responses):
             if response is None:
                 self._logger.warning(
-                    f"Request with idx={idx} failed; will be retried; Current retry: {current_retry + 1}/{max_retries};")
+                    f"Request with idx={idx} failed; will be retried; "
+                    f"Current retry: {current_retry + 1}/{max_retries};")
                 failed_requests.append(requests[idx])
                 failed_requests_og_indices.append(idx)
 
@@ -248,7 +250,10 @@ class APIClient:
                 self._logger.info(msg)
                 self._logged_msgs.add(msg)
 
-        unsupported_kwargs = {k: v for k, v in request.items() if (k not in supported_params and k not in provider_specific_kwargs)}
+        unsupported_kwargs = {
+            k: v for k, v in request.items()
+            if (k not in supported_params and k not in provider_specific_kwargs)
+        }
         if unsupported_kwargs:
             msg = f"Unsupported parameters for model='{model}' in API request: {unsupported_kwargs}."
             if msg not in self._logged_msgs:
@@ -286,34 +291,34 @@ class APIClient:
                     f"Dropping {drop_fraction} of the message due to token limit; "
                     f"request_char_len={request_char_len}, max_tokens={max_tokens}, request_tok_len={request_tok_len};")
 
-            # Prefer trimming non-system messages; if none, trim last message
-            idx = len(messages) - 1
-            while idx >= 0 and messages[idx].get("role") == "system":
-                idx -= 1
-            if idx < 0:
-                idx = len(messages) - 1
-
-            remaining = num_chars_to_drop
-            while remaining > 0 and messages:
-                current_len = len(messages[idx]["content"])
-                if current_len > remaining:
-                    messages[idx]["content"] = messages[idx]["content"][: -remaining]
-                    remaining = 0
-                else:
-                    remaining -= current_len
-                    messages.pop(idx)
-                    if not messages:
-                        break
-                    idx = len(messages) - 1
-                    while idx >= 0 and messages[idx].get("role") == "system":
-                        idx -= 1
-                    if idx < 0:
-                        idx = len(messages) - 1
+            self._drop_chars_from_messages(messages, num_chars_to_drop)
 
             request_tok_len = self.count_messages_tokens(messages, model=model)
             request_char_len = total_chars(messages)
 
         return messages
+
+    def _select_trim_index(self, messages: list[dict]) -> int:
+        """Select the index of the message to trim, preferring non-system messages."""
+        idx = len(messages) - 1
+        while idx >= 0 and messages[idx].get("role") == "system":
+            idx -= 1
+        if idx < 0:
+            idx = len(messages) - 1
+        return idx
+
+    def _drop_chars_from_messages(self, messages: list[dict], num_chars_to_drop: int) -> None:
+        """Drop a number of characters from the tail of messages, skipping system messages when possible."""
+        remaining = num_chars_to_drop
+        while remaining > 0 and messages:
+            idx = self._select_trim_index(messages)
+            current_len = len(messages[idx]["content"])
+            if current_len > remaining:
+                messages[idx]["content"] = messages[idx]["content"][:-remaining]
+                remaining = 0
+            else:
+                remaining -= current_len
+                messages.pop(idx)
 
     def get_max_context_tokens(self, model: str) -> int:
         """Get the maximum context tokens for a model."""
@@ -325,7 +330,8 @@ class APIClient:
             return max_tokens
         except Exception as e:
             self._logger.warning(
-                f"Could not get max context tokens from litellm: {e}. Using fallback default of {DEFAULT_MAX_CONTEXT_TOKENS} tokens.")
+                f"Could not get max context tokens from litellm: {e}. "
+                f"Using fallback default of {DEFAULT_MAX_CONTEXT_TOKENS} tokens.")
             return DEFAULT_MAX_CONTEXT_TOKENS
 
     def count_messages_tokens(
@@ -337,7 +343,8 @@ class APIClient:
     ) -> int:
         """Count tokens in text using the model's tokenizer."""
         msgs_char_len = sum(
-            len(msg["content"]) for msg in messages if (msg is not None and "content" in msg and msg["content"] is not None)
+            len(msg["content"]) for msg in messages
+            if (msg is not None and "content" in msg and msg["content"] is not None)
         )
 
         self._logger.debug(
@@ -385,7 +392,7 @@ class APIClient:
 
         return response
 
-    def _acquire_rate_limited_resources(self, *, request: dict) -> None:
+    def _acquire_rate_limited_resources(self, *, request: dict) -> None:    # noqa: C901
         """Wait for the rate limit to be available and acquire necessary resources."""
         model = request.get("model")
         messages = request.get("messages", [])
@@ -398,8 +405,6 @@ class APIClient:
         if self._rpm_limiter is None and self._tpm_limiter is None:
             return
 
-        import time as _time
-
         # Acquire RPM first (single unit)
         if self._rpm_limiter is not None:
             while True:
@@ -408,19 +413,17 @@ class APIClient:
                         break
                 except Exception:
                     pass
-                _time.sleep(1)
+                time.sleep(1)
 
-        # Acquire TPM tokens one-by-one to avoid bucket overflow with large weights
+        # Acquire TPM tokens in one request; rely on pyrate-limiter to handle weights
         if self._tpm_limiter is not None and token_count > 0:
-            tokens_remaining = token_count
-            while tokens_remaining > 0:
+            while True:
                 try:
-                    if self._tpm_limiter.try_acquire("tokens", 1):
-                        tokens_remaining -= 1
-                        continue
+                    if self._tpm_limiter.try_acquire("tokens", weight=token_count):
+                        break
                 except Exception:
                     pass
-                _time.sleep(1)
+                time.sleep(1)
 
         self._logger.debug(
             f"Thread {thread_id} acquired rate limit resources: request={1}, tokens={token_count}")
@@ -447,4 +450,3 @@ class APIClient:
             }
             for request, response in zip(requests, responses)
         ])
-
