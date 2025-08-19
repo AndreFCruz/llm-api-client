@@ -9,6 +9,6 @@ try:
     __version__ = metadata.version("llm-api-client")
 except metadata.PackageNotFoundError:
     # Fallback when running from source without installation
-    __version__ = "0.1.2"
+    __version__ = "0.1.3"
 
 __version_info__ = tuple(__version__.split("."))
