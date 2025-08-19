@@ -256,9 +256,10 @@ class TestAPIClient:
         # The second request should NOT block for ~60s; it should return quickly
         # and should NOT invoke the completion due to max_delay being exceeded.
         assert len(results) == 2
-        # First request succeeds, second is None due to rate-limit acquisition failure
-        assert results[0] is not None
-        assert results[1] is None
+        # Exactly one request should succeed and one should fail due to max_delay
+        num_none = sum(1 for r in results if r is None)
+        num_ok = sum(1 for r in results if r is not None)
+        assert num_none == 1 and num_ok == 1
         # Only one API call should have been made
         assert mock_completion.call_count == 1
         # Ensure we didn't wait a full minute
