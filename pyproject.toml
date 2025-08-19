@@ -109,6 +109,7 @@ python_version = "3.11"
 [tool.tox]
 legacy_tox_ini = """
 [tox]
+
 env_list =
     py311
     py312
@@ -120,12 +121,10 @@ env_list =
 description = run unit tests
 deps =
     pytest>=8
-    coverage>=7
+    pytest-cov>=4
     pytest-xdist>=3
 commands =
-    coverage erase
-    coverage run -m pytest {posargs:tests}
-    coverage report -m
+    pytest --cov=llm_api_client --cov-branch {posargs:tests}
 
 [testenv:type]
 description = run type checks

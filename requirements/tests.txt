@@ -1,5 +1,5 @@
 pytest>=8
-coverage>=7
+pytest-cov>=4
 flake8-pyproject
 flake8
 mypy>=1.0
