@@ -11,10 +11,10 @@ def test_get_max_context_tokens_fallback_on_error(mock_get_model_info):
     mock_get_model_info.side_effect = RuntimeError("boom")
     client = APIClient()
 
-    # When litellm raises, the client should fall back to default env value (20_000)
+    # When litellm raises, the client should fall back to default env value (100_000)
     max_tokens = client.get_max_context_tokens("any-model")
     assert isinstance(max_tokens, int)
-    assert max_tokens >= 10_000  # conservative lower bound; default is 20k
+    assert max_tokens >= 100_000
 
 
 @patch("litellm.token_counter")
