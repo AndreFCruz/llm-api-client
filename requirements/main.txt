@@ -1,5 +1,5 @@
 litellm
-openai
+openai<1.100
 numpy
 tqdm
 pyrate-limiter>=3.0
