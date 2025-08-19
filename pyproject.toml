@@ -88,9 +88,18 @@ src_paths = ["llm_api_client", "tests"]
 branch = true
 source = ["llm_api_client"]
 omit = ["llm_api_client/_version.py", "tests"]
+concurrency = ["thread"]
+parallel = true
+relative_files = true
 
 [tool.coverage.report]
 show_missing = true
+
+[tool.coverage.paths]
+source = [
+    "llm_api_client",
+    ".tox/*/lib/python*/site-packages/llm_api_client",
+]
 
 # MyPy
 [tool.mypy]
@@ -119,12 +128,15 @@ env_list =
 
 [testenv]
 description = run unit tests
+usedevelop = true
+changedir = {toxinidir}
 deps =
     pytest>=8
     pytest-cov>=4
     pytest-xdist>=3
+    coverage>=7.2
 commands =
-    pytest --cov=llm_api_client --cov-branch {posargs:tests}
+    pytest --cov=llm_api_client --cov-branch -n auto {posargs:tests}
 
 [testenv:type]
 description = run type checks
