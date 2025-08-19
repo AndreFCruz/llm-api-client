@@ -5,7 +5,7 @@ import copy
 import threading
 from typing import Any
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 import logging
 
 import openai
@@ -179,6 +179,10 @@ class APIClient:
             A list of response objects returned by the API function calls.
             If a request fails, the corresponding response will be None.
         """
+        # Short-circuit: no requests
+        if not requests:
+            return []
+
         # Create a list to store results, maintaining the order of requests
         responses = [None] * len(requests)
 
@@ -219,7 +223,7 @@ class APIClient:
                         responses[request_idx] = None   # Explicitly set failed responses to None
 
             # Handle timeout from as_completed
-            except TimeoutError as e:
+            except FuturesTimeoutError as e:
                 incomplete_indices = [idx for idx, resp in enumerate(responses) if resp is None]
                 self._logger.error(
                     "Timeout reached after %s seconds. %d/%d requests did not complete; "
@@ -414,47 +418,63 @@ class APIClient:
             less than or equal to the maximum context tokens for the model.
         """
         messages = copy.deepcopy(messages)
-        request_char_len = sum(len(msg["content"]) for msg in messages)
-        request_tok_len = self.count_messages_tokens(messages, model=model)
         max_tokens = self.get_max_context_tokens(model)
 
-        # Easy heuristic: iteratively drop the last 10% of the prompt
-        while request_tok_len > max_tokens:
-            # Estimate the ratio of chars to keep by comparing request_tok_len and max_tokens
-            ratio_of_chars_to_keep = min(
-                0.9,  # always drop at least 10%
-                (max_tokens / request_tok_len) - 0.05,
-            )
+        # Iteratively trim from the end across messages until within limits
+        def total_chars(msgs: list[dict]) -> int:
+            return sum(len(m["content"]) for m in msgs)
 
-            # Log a warning if we're dropping more than 50% of the message
-            if ratio_of_chars_to_keep < 0.5:
+        request_tok_len = self.count_messages_tokens(messages, model=model)
+        request_char_len = total_chars(messages)
+
+        while request_tok_len > max_tokens and messages:
+            # Estimate chars per token for current request
+            chars_per_token = max(1.0, request_char_len / max(request_tok_len, 1))
+
+            # Target tokens to drop to land near the limit, keeping a small buffer
+            tokens_to_drop = max(1, request_tok_len - max_tokens)
+            approx_chars_to_drop = int(tokens_to_drop * chars_per_token)
+
+            # Avoid overly aggressive drops; cap to 15% of current characters
+            max_step = max(1, int(request_char_len * 0.15))
+            num_chars_to_drop = min(approx_chars_to_drop, max_step)
+
+            # Warn if large drop fraction
+            drop_fraction = num_chars_to_drop / max(request_char_len, 1)
+            if drop_fraction > 0.5:
                 self._logger.warning(
-                    f"Dropping {1 - ratio_of_chars_to_keep} of the message due to "
-                    f"token limit; request_char_len={request_char_len}, "
-                    f"max_tokens={max_tokens}, request_tok_len={request_tok_len};")
+                    f"Dropping {drop_fraction} of the message due to token limit; "
+                    f"request_char_len={request_char_len}, max_tokens={max_tokens}, "
+                    f"request_tok_len={request_tok_len};")
 
-            # Ensure we always keep at least 5% of the message
-            ratio_of_chars_to_keep = max(0.05, ratio_of_chars_to_keep)
-            assert 0 < ratio_of_chars_to_keep < 1
+            # Drop from the last non-system message first; if all are system, drop from last
+            idx = len(messages) - 1
+            while idx >= 0 and messages[idx].get("role") == "system":
+                idx -= 1
+            if idx < 0:
+                idx = len(messages) - 1
 
-            # Compute number of chars to drop
-            num_chars_to_drop = int(request_char_len * (1 - ratio_of_chars_to_keep))
-            assert num_chars_to_drop > 0
+            remaining = num_chars_to_drop
+            while remaining > 0 and messages:
+                current_len = len(messages[idx]["content"])
+                if current_len > remaining:
+                    messages[idx]["content"] = messages[idx]["content"][: -remaining]
+                    remaining = 0
+                else:
+                    # Remove entire message content and continue with previous
+                    remaining -= current_len
+                    messages.pop(idx)
+                    if not messages:
+                        break
+                    idx = len(messages) - 1
+                    while idx >= 0 and messages[idx].get("role") == "system":
+                        idx -= 1
+                    if idx < 0:
+                        idx = len(messages) - 1
 
-            # Drop `num_chars_to_drop` chars from the last message
-            if len(messages[-1]["content"]) > num_chars_to_drop:
-                messages[-1]["content"] = messages[-1]["content"][: -num_chars_to_drop]
-            else:
-                # If the last message is shorter than `num_chars_to_drop`, drop the entire message
-                messages.pop()
-
-                self._logger.warning(
-                    f"Could not truncate {num_chars_to_drop} chars from the last message; "
-                    f"dropping entire message instead...")
-
-            # Re-count tokens
+            # Recompute lengths and tokens
             request_tok_len = self.count_messages_tokens(messages, model=model)
-            request_char_len = sum(len(msg["content"]) for msg in messages)
+            request_char_len = total_chars(messages)
 
         return messages
 
@@ -509,6 +529,11 @@ class APIClient:
             with ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(litellm.token_counter, model=model, messages=messages)
                 return future.result(timeout=timeout)
+
+        except FuturesTimeoutError:
+            self._logger.error(
+                f"Token counting timed out after {timeout} seconds. Using a rough approximation.")
+            return msgs_char_len // 3  # Rough approximation
 
         except TimeoutError:
             self._logger.error(
@@ -600,10 +625,26 @@ class APIClient:
         # where we acquire the RPM but not the TPM, or vice versa.
         # However, it won't lead to a DEADLOCK since resources get released over
         # time -- but it will lead to suboptimal resource utilization.
-        if self._rpm_limiter is not None:
-            self._rpm_limiter.try_acquire("api_calls", weight=1)
-        if self._tpm_limiter is not None:
-            self._tpm_limiter.try_acquire("tokens", weight=token_count)
+        if self._rpm_limiter is None and self._tpm_limiter is None:
+            return
+
+        # Block until both resources can be acquired. Use try_acquire in a loop to avoid
+        # relying on internal blocking semantics and to ensure compatibility.
+        import time as _time
+        while True:
+            acquired = True
+
+            if self._rpm_limiter is not None:
+                acquired = self._rpm_limiter.try_acquire("api_calls", 1)
+
+            if acquired and self._tpm_limiter is not None:
+                acquired = self._tpm_limiter.try_acquire("tokens", token_count)
+
+            if acquired:
+                break
+
+            # Sleep briefly before retrying to respect the limiter window
+            _time.sleep(1)
 
         self._logger.debug(
             f"Thread {thread_id} acquired rate limit resources: "

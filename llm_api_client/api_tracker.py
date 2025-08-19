@@ -16,16 +16,36 @@ class APIUsageTracker:
 
     def _log_response(self, response, start_time, end_time):
         """Log the query for debugging purposes."""
+        # Safely extract usage data
+        usage = getattr(response, "usage", {}) or {}
+        prompt_tokens = usage.get("prompt_tokens", 0) or 0
+        completion_tokens = usage.get("completion_tokens", 0) or 0
+        total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens) or 0
+
+        # Build a serializable response dictionary
+        if hasattr(response, "model_dump") and callable(getattr(response, "model_dump")):
+            response_serialized = response.model_dump()
+        else:
+            try:
+                # Fallback to attribute dict-like conversion for mocks
+                response_serialized = {
+                    key: getattr(response, key)
+                    for key in ["choices", "model", "created", "usage"]
+                    if hasattr(response, key)
+                }
+            except Exception:
+                response_serialized = {"repr": repr(response)}
+
         response_dict = {
-            "prompt_tokens": response.usage.get("prompt_tokens"),
-            "completion_tokens": response.usage.get("completion_tokens"),
-            "total_tokens": response.usage.get("total_tokens"),
+            "prompt_tokens": int(prompt_tokens),
+            "completion_tokens": int(completion_tokens),
+            "total_tokens": int(total_tokens),
 
             "start_time": start_time.isoformat(),
             "end_time": end_time.isoformat(),
-            "elapsed_time": (end_time - start_time).total_seconds(),
+            "elapsed_time": float((end_time - start_time).total_seconds()),
 
-            "response": dict(response),
+            "response": response_serialized,
         }
 
         # Log and save response information
@@ -55,12 +75,12 @@ class APIUsageTracker:
     @property
     def total_prompt_tokens(self) -> int:
         """Total number of prompt tokens used across all API calls."""
-        return sum(r['prompt_tokens'] for r in self._responses)
+        return sum(int(r.get('prompt_tokens', 0) or 0) for r in self._responses)
 
     @property
     def total_completion_tokens(self) -> int:
         """Total number of completion tokens used across all API calls."""
-        return sum(r['completion_tokens'] for r in self._responses)
+        return sum(int(r.get('completion_tokens', 0) or 0) for r in self._responses)
 
     @property
     def num_api_calls(self) -> int:
@@ -70,7 +90,7 @@ class APIUsageTracker:
     @property
     def mean_response_time(self) -> float | None:
         """Mean response time of API calls in seconds."""
-        return float(np.mean([r['elapsed_time'] for r in self._responses])) if self._responses else None
+        return float(np.mean([float(r.get('elapsed_time', 0) or 0) for r in self._responses])) if self._responses else None
 
     def response_time_at_percentile(self, percentile: float) -> float | None:
         """Response time at a given percentile in seconds."""
