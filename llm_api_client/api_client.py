@@ -35,6 +35,21 @@ class APIClient:
     """A generic API client to run rate-limited requests concurrently using threads.
 
     By default, uses the LiteLLM completion API.
+
+    API requests and responses are logged and can optionally be saved to disk if a log
+    file is specified. An APIUsageTracker instance is automatically instantiated to track
+    the cost and usage of API calls.
+
+    Examples
+    --------
+    >>> completion_api_client = APIClient(max_requests_per_minute=5)
+    >>> requests = [
+    >>>     dict(
+    >>>         model="gpt-3.5-turbo",
+    >>>         messages=[{"role": "user", "content": prompt}],
+    >>>     ) for prompt in user_prompts
+    >>> ]
+    >>> results = completion_api_client.make_requests(requests)
     """
 
     def __init__(
@@ -54,6 +69,9 @@ class APIClient:
             Maximum tokens allowed per minute.
         max_workers : int, optional
             Maximum number of worker threads. Default is min(CPU count * 20, max_rpm).
+        max_delay_seconds : int, optional
+            Maximum time in seconds that the internal rate limiter will wait to acquire
+            resources before timing out (applies to both RPM and TPM limiters). Default is 5 minutes.
         """
         self.max_requests_per_minute = max_requests_per_minute
         self.max_tokens_per_minute = max_tokens_per_minute
@@ -100,6 +118,7 @@ class APIClient:
 
     @property
     def details(self) -> dict[str, Any]:
+        """Get the details of the API client."""
         return {
             "max_requests_per_minute": self.max_requests_per_minute,
             "max_tokens_per_minute": self.max_tokens_per_minute,
@@ -109,12 +128,26 @@ class APIClient:
 
     @property
     def tracker(self) -> APIUsageTracker:
-        """The API usage tracker instance."""
+        """
+        The API usage tracker instance.
+
+        Returns
+        -------
+        llm_api_client.api_tracker.APIUsageTracker
+            The API usage tracker.
+        """
         return self._tracker
 
     @property
     def history(self) -> list[dict]:
-        """The history of requests and responses."""
+        """
+        The history of requests and responses.
+
+        Returns
+        -------
+        list[dict]
+            A list of request/response entries.
+        """
         return self._history
 
     def make_requests(
@@ -125,7 +158,30 @@ class APIClient:
         sanitize: bool = True,
         timeout: float = None,
     ) -> list[object]:
-        """Make a series of rate-limited API requests concurrently using threads."""
+        """Make a series of rate-limited API requests concurrently using threads.
+
+        Parameters
+        ----------
+        requests : list[dict]
+            A list of dictionaries, each containing the parameters to pass to
+            the API function call.
+        max_workers : int, optional
+            The maximum number of threads to use in the ThreadPoolExecutor.
+            If not provided, will default to: min(CPU count * 20, max_rpm).
+        sanitize : bool, optional
+            Whether to sanitize the requests; i.e., filter out request
+            parameters that may be incompatible with the model and provider.
+            Default is True.
+        timeout : float, optional
+            Maximum number of seconds to wait for all requests to complete.
+            If None (default), waits indefinitely.
+
+        Returns
+        -------
+        responses : list[object]
+            A list of response objects returned by the API function calls.
+            If a request fails, the corresponding response will be None.
+        """
         # Short-circuit: no requests
         if not requests:
             return []
@@ -177,7 +233,29 @@ class APIClient:
         timeout: float = None,
         current_retry: int = 0,
     ) -> list[object]:
-        """Make a series of rate-limited API requests with automatic retries for failed requests."""
+        """Make a series of rate-limited API requests with automatic retries for failed requests.
+
+        Parameters
+        ----------
+        requests : list[dict]
+            A list of dictionaries, each containing the parameters to pass to the API function call.
+        max_workers : int, optional
+            Maximum number of worker threads to use.
+        max_retries : int, optional
+            Maximum number of retry attempts for failed requests.
+        sanitize : bool, optional
+            Whether to sanitize the request parameters.
+        timeout : float, optional
+            Maximum number of seconds to wait for all requests to complete.
+            If None (default), waits indefinitely.
+        current_retry : int, optional
+            Current retry attempt number (used internally for recursion).
+
+        Returns
+        -------
+        list[object]
+            A list of response objects returned by the API function calls.
+        """
         if current_retry > max_retries:
             self._logger.error(
                 f"Exceeded max_retries ({max_retries}) for {len(requests)} requests; returning None responses")
@@ -216,7 +294,16 @@ class APIClient:
         return responses
 
     def sanitize_completion_request(self, request: dict) -> dict:
-        """Sanitize the request parameters for the completion API."""
+        """Sanitize the request parameters for the completion API.
+
+        1. Checks and removes unsupported parameters for this model and provider.
+        2. Truncates the request to the maximum context tokens for the model.
+
+        Returns
+        -------
+        sanitized_request : dict
+            A dictionary containing parsed and filtered request parameters.
+        """
         sanitized_request = self.remove_unsupported_params(request)
         sanitized_request["messages"] = self.truncate_to_max_context_tokens(
             messages=sanitized_request["messages"],
@@ -225,7 +312,16 @@ class APIClient:
         return sanitized_request
 
     def remove_unsupported_params(self, request: dict) -> dict:
-        """Ensure request params are compatible with the model and provider."""
+        """Ensure request params are compatible with the model and provider.
+
+        Checks and removes unsupported parameters for this model and provider.
+
+        Returns
+        -------
+        compatible_request : dict
+            A dictionary containing the provided request with all unsupported
+            parameters removed.
+        """
         request = copy.deepcopy(request)
         model = request.pop("model")
         messages = request.pop("messages")
@@ -267,7 +363,21 @@ class APIClient:
         messages: list[dict],
         model: str,
     ) -> list[dict]:
-        """Truncate a prompt to the maximum context tokens for a model."""
+        """Truncate a prompt to the maximum context tokens for a model.
+
+        Parameters
+        ----------
+        messages : list[dict]
+            The request messages to truncate.
+        model : str
+            The name of the model to use.
+
+        Returns
+        -------
+        list[dict]
+            The request messages, truncated so that the total token count is
+            less than or equal to the maximum context tokens for the model.
+        """
         messages = copy.deepcopy(messages)
         max_tokens = self.get_max_context_tokens(model)
 
@@ -341,7 +451,22 @@ class APIClient:
         model: str,
         timeout: float = 10,
     ) -> int:
-        """Count tokens in text using the model's tokenizer."""
+        """Count tokens in text using the model's tokenizer.
+
+        Parameters
+        ----------
+        messages : list[dict]
+            The messages to count tokens for.
+        model : str
+            The model to count tokens for.
+        timeout : float, optional
+            The timeout for the token counting operation in seconds.
+
+        Returns
+        -------
+        int
+            The number of tokens in the messages.
+        """
         msgs_char_len = sum(
             len(msg["content"]) for msg in messages
             if (msg is not None and "content" in msg and msg["content"] is not None)
@@ -372,7 +497,25 @@ class APIClient:
         request: dict,
         sanitize: bool = True,
     ) -> object:
-        """Submit an API call with the given parameters, honoring rate limits."""
+        """Submit an API call with the given parameters, honoring rate limits.
+
+        Will block the calling thread until the request can be made without violating
+        the rate limits!
+
+        Parameters
+        ----------
+        request : dict
+            The request parameters to pass to the API function call.
+        sanitize : bool, optional
+            Whether to sanitize the request; i.e., parse and filter out request
+            parameters that may be incompatible with the model and provider.
+            Default is True.
+
+        Returns
+        -------
+        response : object
+            The response object returned by the API function call.
+        """
         if sanitize:
             request = self.sanitize_completion_request(request)
 
@@ -393,7 +536,16 @@ class APIClient:
         return response
 
     def _acquire_rate_limited_resources(self, *, request: dict) -> None:    # noqa: C901
-        """Wait for the rate limit to be available and acquire necessary resources."""
+        """Wait for the rate limit to be available and acquire necessary resources.
+
+        This function blocks the current thread until rate limits allow the request
+        to proceed. It accounts for both request count and token count.
+
+        Parameters
+        ----------
+        request : dict
+            The API request parameters containing model and messages.
+        """
         model = request.get("model")
         messages = request.get("messages", [])
         token_count = self.count_messages_tokens(messages, model=model)
@@ -430,11 +582,20 @@ class APIClient:
             raise RuntimeError("Rate limit acquisition failed due to max_delay constraint")
 
     def __save_history(self, *, requests: list[dict], responses: list[object]) -> None:
-        """Save API requests and responses to the client's history."""
+        """Save API requests and responses to the client's history.
+
+        Parameters
+        ----------
+        requests : list[dict]
+            The list of API request parameters.
+        responses : list[object]
+            The list of API responses corresponding to the requests.
+        """
         def get_response_dict(response):
             return getattr(response, "model_dump", lambda: response.__dict__)()
 
         def get_response_datetime(response):
+            """Convert a Unix timestamp to a formatted datetime string."""
             return datetime.fromtimestamp(response["created"]).strftime('%Y-%m-%d %H:%M:%S')
 
         def get_response_content(response):
