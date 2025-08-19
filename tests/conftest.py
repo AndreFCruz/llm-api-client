@@ -1,14 +1,12 @@
 """Fixtures for pytest tests in the project.
 """
-import os
 import sys
 import types
 import pytest
 
 
-# Optional, opt-in stubs to decouple tests from external dependencies.
-# Enable by setting env var: LLM_API_CLIENT_TEST_USE_STUBS=1
-if os.getenv("LLM_API_CLIENT_TEST_USE_STUBS") == "1" and "litellm" not in sys.modules:
+# Provide lightweight stubs to decouple tests from external dependencies.
+if "litellm" not in sys.modules:
     litellm = types.ModuleType("litellm")
     # attributes used in code/tests
     litellm.success_callback = []
@@ -35,7 +33,7 @@ if os.getenv("LLM_API_CLIENT_TEST_USE_STUBS") == "1" and "litellm" not in sys.mo
     litellm.completion = _completion
     sys.modules["litellm"] = litellm
 
-if os.getenv("LLM_API_CLIENT_TEST_USE_STUBS") == "1" and "openai" not in sys.modules:
+if "openai" not in sys.modules:
     # Minimal stub so that `openai.APIError` can be referenced in exception
     # handling paths. We don't need functionality.
     openai = types.ModuleType("openai")
