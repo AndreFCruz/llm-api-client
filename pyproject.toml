@@ -121,7 +121,7 @@ description = run unit tests
 deps =
     pytest>=8
     coverage>=7
-    pytest-xdist
+    pytest-xdist>=3
 commands =
     coverage erase
     coverage run -m pytest {posargs:tests}
