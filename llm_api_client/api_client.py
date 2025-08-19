@@ -126,14 +126,24 @@ class APIClient:
     @property
     def tracker(self) -> APIUsageTracker:
         """
-        APIUsageTracker: The API usage tracker instance.
+        The API usage tracker instance.
+
+        Returns
+        -------
+        llm_api_client.api_tracker.APIUsageTracker
+            The API usage tracker.
         """
         return self._tracker
 
     @property
     def history(self) -> list[dict]:
         """
-        list[dict]: The history of requests and responses.
+        The history of requests and responses.
+
+        Returns
+        -------
+        list[dict]
+            A list of request/response entries.
         """
         return self._history
 
