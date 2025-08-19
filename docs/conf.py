@@ -1,6 +1,6 @@
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../llm_api_client'))
+sys.path.insert(0, os.path.abspath('..'))
 
 # -- Project information -----------------------------------------------------
 project = 'llm-api-client'
@@ -43,13 +43,18 @@ html_theme = 'sphinx_rtd_theme'
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 
+html_theme_options = {
+    'navigation_depth': 3,
+    'collapse_navigation': False,
+}
+
 # -- Options for intersphinx extension ---------------------------------------
 intersphinx_mapping = {'python': ('https://docs.python.org/3', None)}
 
 # -- Options for autodoc extension -------------------------------------------
 autodoc_member_order = 'bysource'   # Order members by source order
-# You might need to mock imports if some dependencies are heavy or C extensions
-# autodoc_mock_imports = ["dependency1", "dependency2"]
+# Mock heavy/optional dependencies so autodoc can import modules without them
+autodoc_mock_imports = ['openai', 'pyrate_limiter', 'numpy', 'litellm']
 
 # -- Napoleon settings -----------------------------------------------------
 napoleon_google_docstring = False
