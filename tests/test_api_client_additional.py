@@ -84,3 +84,23 @@ def test_remove_unsupported_params_filters_o_series_temperature(mock_get_params)
     cleaned = client.remove_unsupported_params(req)
     assert "temperature" not in cleaned
     assert "max_tokens" in cleaned
+
+
+def test_get_max_context_tokens_env_override_takes_precedence(monkeypatch):
+    monkeypatch.setenv("MAX_INPUT_TOKENS_OVERRIDE", "8192")
+    client = APIClient()
+    # With override set, litellm.get_model_info should not be called
+    with patch("litellm.get_model_info") as mock_get_model_info:
+        value = client.get_max_context_tokens("any-model")
+        assert value == 8192
+        mock_get_model_info.assert_not_called()
+
+
+def test_get_max_context_tokens_env_override_invalid_ignored(monkeypatch):
+    monkeypatch.setenv("MAX_INPUT_TOKENS_OVERRIDE", "not-an-int")
+    client = APIClient()
+    with patch("litellm.get_model_info") as mock_get_model_info:
+        mock_get_model_info.return_value = {"max_input_tokens": 7777}
+        value = client.get_max_context_tokens("any-model")
+        assert value == 7777
+        mock_get_model_info.assert_called_once()

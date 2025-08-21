@@ -20,15 +20,16 @@ from ._params import ALL_COMPLETION_PARAMS
 OPENAI_API_REQUESTS_PER_MINUTE = 10_000
 OPENAI_API_TOKENS_PER_MINUTE = 2_000_000
 
-# Default max context window tokens
-DEFAULT_MAX_CONTEXT_TOKENS_ENV_VAR = "DEFAULT_MAX_CONTEXT_TOKENS"
+# Default max context window tokens fallback
+MAX_CONTEXT_TOKENS_FALLBACK_ENV_VAR = "MAX_CONTEXT_TOKENS_FALLBACK"
 try:
-    DEFAULT_MAX_CONTEXT_TOKENS = int(os.getenv(DEFAULT_MAX_CONTEXT_TOKENS_ENV_VAR, "100000"))
+    DEFAULT_MAX_CONTEXT_TOKENS = int(os.getenv(MAX_CONTEXT_TOKENS_FALLBACK_ENV_VAR, "100000"))
 except ValueError:
     logging.getLogger(__name__).warning(
-        f"Environment variable {DEFAULT_MAX_CONTEXT_TOKENS_ENV_VAR} must be an integer. "
+        f"Environment variable {MAX_CONTEXT_TOKENS_FALLBACK_ENV_VAR} must be an integer. "
         "Falling back to 100,000 tokens.")
     DEFAULT_MAX_CONTEXT_TOKENS = 100_000
+MAX_INPUT_TOKENS_OVERRIDE_ENV_VAR = "MAX_INPUT_TOKENS_OVERRIDE"
 
 
 class APIClient:
@@ -432,6 +433,14 @@ class APIClient:
 
     def get_max_context_tokens(self, model: str) -> int:
         """Get the maximum context tokens for a model."""
+        # Allow env override to take precedence over LiteLLM-reported value
+        override_value_str = os.getenv(MAX_INPUT_TOKENS_OVERRIDE_ENV_VAR)
+        if override_value_str:
+            try:
+                return int(override_value_str)
+            except ValueError:
+                self._logger.warning(
+                    f"Environment variable {MAX_INPUT_TOKENS_OVERRIDE_ENV_VAR} must be an integer. Ignoring override.")
         try:
             model_info = litellm.get_model_info(model)
             max_tokens = model_info.get("max_input_tokens")

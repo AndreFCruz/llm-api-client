@@ -11,8 +11,10 @@ Client limits
 Environment variables
 ---------------------
 
-- **DEFAULT_MAX_CONTEXT_TOKENS**: Maximum context window tokens used by the sanitizer
-  to truncate long message histories (default: 20000).
+- **MAX_CONTEXT_TOKENS_FALLBACK**: Fallback maximum context window tokens used by the sanitizer
+  to truncate long message histories when LiteLLM info isn't available (default: 100000).
+- **MAX_INPUT_TOKENS_OVERRIDE**: When set to an integer, this value is used as the
+  model's maximum input tokens, taking precedence over the value reported by LiteLLM.
 
 Provider credentials
 --------------------
