@@ -530,16 +530,19 @@ class APIClient:
 
         self._acquire_rate_limited_resources(request=request)
 
+        # Log the API request at DEBUG level
+        thread_id = threading.get_ident()
         self._logger.debug(
-            f"Thread {threading.get_ident()} making API call with parameters: {request}")
+            f"API Request [Thread {thread_id}] - Model: {request.get('model')}; Parameters: {request}")
 
         try:
             response = self.api_call(**request)
-            self._logger.debug(
-                f"Thread {threading.get_ident()} completed API call with response: {response}")
+
+            # Log the API response at DEBUG level
+            self._logger.debug(f"API Response [Thread {thread_id}] - {response}")
         except Exception as e:
             self._logger.error(
-                f"Thread {threading.get_ident()} failed API call with error: {e}")
+                f"API Request Failed [Thread {thread_id}] - Error: {e}")
             raise e
 
         return response
