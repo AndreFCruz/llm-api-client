@@ -58,7 +58,7 @@ class APIClient:
         max_requests_per_minute: int = OPENAI_API_REQUESTS_PER_MINUTE,
         max_tokens_per_minute: int = OPENAI_API_TOKENS_PER_MINUTE,
         max_workers: int = None,
-        max_delay_seconds: int = 5 * 60,
+        max_delay_seconds: float = 5 * 60,
     ):
         """Initialize the API client.
 
@@ -70,9 +70,10 @@ class APIClient:
             Maximum tokens allowed per minute.
         max_workers : int, optional
             Maximum number of worker threads. Default is min(CPU count * 20, max_rpm).
-        max_delay_seconds : int, optional
+        max_delay_seconds : float, optional
             Maximum time in seconds that the internal rate limiter will wait to acquire
             resources before timing out (applies to both RPM and TPM limiters). Default is 5 minutes.
+            If None, waits indefinitely.
         """
         self.max_requests_per_minute = max_requests_per_minute
         self.max_tokens_per_minute = max_tokens_per_minute
@@ -85,22 +86,19 @@ class APIClient:
         if self._max_workers is None:
             self._max_workers = os.cpu_count() * 20
 
-        # Set up rate limiter using pyrate-limiter
-        limiter_config = {
-            "max_delay": max_delay_seconds * 1000,  # milliseconds
-        }
+        # Set up rate limiter using pyrate-limiter; the max delay is enforced on each
+        # acquisition (pyrate-limiter's `timeout`, in seconds; -1 waits indefinitely)
+        self._max_delay_seconds = -1 if max_delay_seconds is None else max_delay_seconds
 
         # RPM limiter
         self._rpm_limiter = None
         if self.max_requests_per_minute is not None:
-            requests_limit = Rate(self.max_requests_per_minute, Duration.MINUTE)
-            self._rpm_limiter = Limiter(requests_limit, **limiter_config)
+            self._rpm_limiter = Limiter(Rate(self.max_requests_per_minute, Duration.MINUTE))
 
         # TPM limiter
         self._tpm_limiter = None
         if self.max_tokens_per_minute is not None:
-            tokens_limit = Rate(self.max_tokens_per_minute, Duration.MINUTE)
-            self._tpm_limiter = Limiter(tokens_limit, **limiter_config)
+            self._tpm_limiter = Limiter(Rate(self.max_tokens_per_minute, Duration.MINUTE))
 
         # Logger
         self._logger = logging.getLogger(__name__)
@@ -573,13 +571,14 @@ class APIClient:
         rpm_lock_acquired = True
         if self._rpm_limiter is not None:
             rpm_lock_acquired = False
-            rpm_lock_acquired = self._rpm_limiter.try_acquire("api_calls", 1)
+            rpm_lock_acquired = self._rpm_limiter.try_acquire("api_calls", 1, timeout=self._max_delay_seconds)
 
         # Acquire TPM tokens in one request; rely on pyrate-limiter to handle weights
         tpm_lock_acquired = True
         if rpm_lock_acquired and self._tpm_limiter is not None and token_count > 0:
             tpm_lock_acquired = False
-            tpm_lock_acquired = self._tpm_limiter.try_acquire("tokens", weight=token_count)
+            tpm_lock_acquired = self._tpm_limiter.try_acquire(
+                "tokens", weight=token_count, timeout=self._max_delay_seconds)
 
         if rpm_lock_acquired and tpm_lock_acquired:
             self._logger.debug(

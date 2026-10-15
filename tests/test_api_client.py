@@ -262,8 +262,33 @@ class TestAPIClient:
         assert num_none == 1 and num_ok == 1
         # Only one API call should have been made
         assert mock_completion.call_count == 1
-        # Ensure we didn't wait a full minute
-        assert elapsed <= 3, f"Expected requests to complete quickly due to max_delay_seconds; took {elapsed:.2f}s"
+        # Ensure we waited for max_delay_seconds, but not a full minute
+        assert 1 <= elapsed <= 3, f"Expected requests to wait ~max_delay_seconds; took {elapsed:.2f}s"
+
+    @patch('litellm.completion')
+    @patch('litellm.token_counter')
+    def test_request_exceeding_tpm_fails_fast(self, mock_token_counter, mock_completion):
+        """A request with more tokens than the TPM limit can never be admitted; it must fail without waiting."""
+        mock_token_counter.return_value = 20
+        client = APIClient(max_requests_per_minute=None, max_tokens_per_minute=10, max_delay_seconds=60)
+
+        start_time = time.time()
+        results = client.make_requests([{"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Hi"}]}])
+
+        assert results == [None]
+        mock_completion.assert_not_called()
+        assert time.time() - start_time < 5
+
+    @patch('litellm.completion')
+    def test_max_delay_seconds_none_waits_indefinitely(self, mock_completion):
+        """max_delay_seconds=None disables the acquisition timeout (requests still go through)."""
+        mock_completion.return_value = MockResponse()
+        client = APIClient(max_requests_per_minute=5, max_delay_seconds=None)
+
+        results = client.make_requests([{"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Hi"}]}])
+
+        assert results[0] is not None
+        mock_completion.assert_called_once()
 
     @patch('litellm.completion')
     def test_request_failure_handling(self, mock_completion):
