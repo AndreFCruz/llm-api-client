@@ -7,12 +7,14 @@ on:
       - "tests/**"
       - "requirements/**"
       - "pyproject.toml"
+      - ".github/workflows/tests.yml"
   pull_request:
     paths:
       - "llm_api_client/**"
       - "tests/**"
       - "requirements/**"
       - "pyproject.toml"
+      - ".github/workflows/tests.yml"
 
 jobs:
   build:
@@ -33,3 +35,8 @@ jobs:
         python -m pip install tox tox-gh-actions
     - name: Test with tox
       run: tox
+    - name: Test with the oldest supported pyrate-limiter
+      if: matrix.python-version == '3.11'
+      run: |
+        python -m pip install ".[tests]" "pyrate-limiter==$(grep -oP '^pyrate-limiter>=\K[0-9.]+' requirements/main.txt)"
+        python -m pytest
