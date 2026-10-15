@@ -2,4 +2,4 @@ litellm
 openai>=2.0
 numpy
 tqdm
-pyrate-limiter>=3.0
+pyrate-limiter>=4.4,<5
