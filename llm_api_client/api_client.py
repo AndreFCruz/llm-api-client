@@ -590,7 +590,7 @@ class APIClient:
                 f"rpm_lock_acquired={rpm_lock_acquired}, tpm_lock_acquired={tpm_lock_acquired}"
             )
             self._logger.error(message)
-            raise RuntimeError("Rate limit acquisition failed due to max_delay constraint")
+            raise RuntimeError("Rate limit acquisition failed: max_delay_seconds exceeded or request above rate limit")
 
     def __save_history(self, *, requests: list[dict], responses: list[object]) -> None:
         """Save API requests and responses to the client's history.
