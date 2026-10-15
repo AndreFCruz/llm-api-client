@@ -14,6 +14,18 @@ from llm_api_client import APIClient
 from mock_objects import MockResponse
 
 
+def record_call_times(mock_completion) -> list[float]:
+    """Make the mocked completion API record the (monotonic) time of each call."""
+    call_times = []
+
+    def completion(**kwargs):
+        call_times.append(time.monotonic())
+        return MockResponse()
+
+    mock_completion.side_effect = completion
+    return call_times
+
+
 class TestAPIClient:
     """Test suite for APIClient class."""
 
@@ -150,9 +162,8 @@ class TestAPIClient:
 
     @patch('litellm.completion')
     def test_rate_limiting_requests_per_minute(self, mock_completion):
-        """Test rate limiting RPM functionality."""
-        # Setup mocks
-        mock_completion.return_value = MockResponse()
+        """Requests are sent in a burst until the RPM budget is used, then wait until a slot frees up."""
+        call_times = record_call_times(mock_completion)
 
         # Initialize client with max_RPM == 2
         client = APIClient(max_requests_per_minute=2, max_tokens_per_minute=None)
@@ -166,37 +177,24 @@ class TestAPIClient:
             for i in range(3)
         ]
 
-        # Record start time
-        start_time = time.time()
-
-        # This should take extra time due to rate limiting
         results = client.make_requests(requests, max_workers=10, sanitize=False)
+        assert all(r is not None for r in results)
 
-        # Measure elapsed time
-        elapsed = time.time() - start_time
-
-        # The 3rd request should be delayed for 60 seconds due to rate limiting
-        assert 60 <= elapsed <= 70, "Rate limiting didn't seem to work as expected"
-        assert len(results) == 3
-        assert mock_completion.call_count == 3
+        # The first 2 requests are sent immediately, and the 3rd waits until the 1st request's
+        # slot frees up 60s later (with 0.5s tolerance for thread scheduling)
+        first, second, third = sorted(call_times)
+        assert second - first < 1
+        assert 59.5 <= third - first <= 62
 
     @patch('litellm.completion')
     @patch('litellm.token_counter')
     def test_rate_limiting_tokens_per_minute(self, mock_token_counter, mock_completion):
-        """Test rate limiting TPM functionality."""
-        n_requests = 2
-        request_tokens = 1000
-        max_tokens_per_minute = 1000
+        """Requests are sent in a burst until the TPM budget is used, then wait until tokens free up."""
+        call_times = record_call_times(mock_completion)
+        mock_token_counter.return_value = 400
 
-        # Setup mocks
-        mock_completion.return_value = MockResponse()
-        mock_token_counter.return_value = request_tokens
-
-        # Initialize client with max_TPM == 1000
-        client = APIClient(
-            max_requests_per_minute=None,
-            max_tokens_per_minute=max_tokens_per_minute,
-        )
+        # Initialize client with max_TPM == 1000, so only 2 requests of 400 tokens fit per minute
+        client = APIClient(max_requests_per_minute=None, max_tokens_per_minute=1000)
 
         # Prepare 3 requests
         requests = [
@@ -204,22 +202,17 @@ class TestAPIClient:
                 "model": "gpt-3.5-turbo",
                 "messages": [{"role": "user", "content": f"Test {i}"}]
             }
-            for i in range(n_requests)
+            for i in range(3)
         ]
 
-        # Record start time
-        start_time = time.time()
-
-        # This should take extra time due to rate limiting
         results = client.make_requests(requests, max_workers=10, sanitize=False)
+        assert all(r is not None for r in results)
 
-        # Measure elapsed time
-        elapsed = time.time() - start_time
-
-        # The 2nd request should be delayed for 60 seconds due to rate limiting
-        assert 60 <= elapsed <= 70, "Rate limiting didn't seem to work as expected"
-        assert len(results) == n_requests
-        assert mock_completion.call_count == n_requests
+        # The first 2 requests are sent immediately, and the 3rd waits until the 1st request's
+        # tokens free up 60s later (with 0.5s tolerance for thread scheduling)
+        first, second, third = sorted(call_times)
+        assert second - first < 1
+        assert 59.5 <= third - first <= 62
 
     @patch('litellm.completion')
     @patch('litellm.token_counter')
